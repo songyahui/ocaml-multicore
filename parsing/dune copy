@@ -12,42 +12,35 @@
 ;*                                                                        *
 ;**************************************************************************
 
-;; We're just reusing the stuff from boot/ here.
-;; One could add a dune file in boot/menhir/ with the appropriate rules if we
-;; want to regenerate the parser while building with dune, but it doesn't seem
-;; essential right now.
+(rule
+ (targets config.ml)
+ (mode    fallback)
+ (deps    (:mk Makefile)
+          ../Makefile.config
+          ; for now the utils Makefile does not use build_config
+          config.mlp)
+ (action  (system "make -f %{mk} %{targets}")))
 
 (rule
- (targets camlinternalMenhirLib.ml)
+ (targets domainstate.ml)
  (mode    fallback)
- (action  (copy# ../boot/menhir/menhirLib.ml %{targets})))
-
-(rule
- (targets camlinternalMenhirLib.mli)
- (mode    fallback)
- (action  (copy# ../boot/menhir/menhirLib.mli %{targets})))
-
-(rule
- (targets parser.ml)
- (mode    fallback)
- (deps    (:dep ../boot/menhir/parser.ml))
+ (deps    (:conf ../Makefile.config)
+          (:c domainstate.ml.c)
+          (:tbl ../runtime/caml/domain_state.tbl))
  (action
    (with-stdout-to %{targets}
-     (bash "cat %{dep} | sed 's/MenhirLib/CamlinternalMenhirLib/g'"))))
+     (bash
+       "`grep '^CPP=' %{conf} | cut -d'=' -f2` -I ../runtime/caml %{c} %{tbl}"
+       ))))
 
 (rule
- (targets parser.mli)
+ (targets domainstate.mli)
  (mode    fallback)
- (deps    (:dep ../boot/menhir/parser.mli))
+ (deps    (:conf ../Makefile.config)
+          (:c domainstate.mli.c)
+          (:tbl ../runtime/caml/domain_state.tbl))
  (action
    (with-stdout-to %{targets}
-     (bash "cat %{dep} | sed 's/MenhirLib/CamlinternalMenhirLib/g'"))))
-
-(ocamllex
- (modules lexer)
- (mode fallback))
-
-(executables
- (names hip)
- (modules parser lexer Syntaxerr hip Pprintast Asttypes Ast_helper Longident Parsetree Location Warnings Misc Terminfo Docstrings Build_path_prefix_map Clflags Profile Numbers Identifiable Arg_helper CamlinternalMenhirLib)
-)
+     (bash
+       "`grep '^CPP=' %{conf} | cut -d'=' -f2` -I ../runtime/caml %{c} %{tbl}"
+       ))))
