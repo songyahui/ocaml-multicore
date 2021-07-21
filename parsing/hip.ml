@@ -55,9 +55,9 @@ let rec string_of_core_type (p:core_type) :string =
     List.fold_left (fun acc a -> acc ^ a) "" (Longident.flatten l.txt)^
     List.fold_left (fun acc a -> acc ^ string_of_core_type a) "" c_li
   | Ptyp_poly (str_li, c) -> 
-    "lsllls"^
-    List.fold_left (fun acc a -> acc ^ a.txt) "" str_li ^ 
+    "type " ^ List.fold_left (fun acc a -> acc ^ a.txt) "" str_li ^ ". " ^
     string_of_core_type c 
+
 
   | _ -> "\nlsllsls\n"
   ;;
@@ -76,16 +76,14 @@ let string_of_kind k : string =
 let string_of_p_constant con : string =
   match con with 
   | Pconst_char i -> String.make 1 i
+  | Pconst_string (i, _, None) -> i
+  | Pconst_string (i, _, Some delim) -> i ^ delim
+  | Pconst_integer (i, None) -> i
   | _ -> "string_of_p_constant"
 ;;
 
 (*
-| Pconst_string (i, _, None) ->
-  pp f "%S" i
-  | Pconst_string (i, _, Some delim) ->
-  pp f "{%s|%s|%s}" delim i delim
-  | Pconst_integer (i, None) ->
-  paren (first_is '-' i) (fun f -> pp f "%s") f i
+
   | Pconst_integer (i, Some m) ->
   paren (first_is '-' i) (fun f (i, m) -> pp f "%s%c" i m) f (i,m)
   | Pconst_float (i, None) ->
@@ -94,28 +92,58 @@ let string_of_p_constant con : string =
   paren (first_is '-' i) (fun f (i,m) -> pp f "%s%c" i m) f (i,m)
   *)
 
-let string_of_pattern (p) : string = 
+let rec string_of_pattern (p) : string = 
   match p.ppat_desc with 
   | Ppat_any -> "_"
   (* _ *)
   | Ppat_var str -> str.txt
   (* x *)
   | Ppat_constant con -> string_of_p_constant con
-  | _ -> "string_of_pattern" ;;
+  | Ppat_type l -> List.fold_left (fun acc a -> acc ^ a) "" (Longident.flatten l.txt)
+  | Ppat_constraint (p1, c) -> string_of_pattern p1 ^ " : "^ string_of_core_type c
+  (* (P : T) *)
+  | Ppat_effect (p1, p2) -> string_of_pattern p1 ^ string_of_pattern p2 ^ "\n"
 
-let string_of_expression e: string =
-  match e.pexp_desc with 
-  | Pexp_ident l -> List.fold_left (fun acc a -> acc ^ a) "" (Longident.flatten l.txt)
+  | Ppat_construct (l, None) -> List.fold_left (fun acc a -> acc ^ a) "" (Longident.flatten l.txt)
+  | Ppat_construct (l, Some p1) ->  
+    List.fold_left (fun acc a -> acc ^ a) "" (Longident.flatten l.txt) ^ 
+    string_of_pattern p1
+  (* #tconst *)
 
-  | _ -> "string_of_expression"
-  ;;
+  | _ -> "string_of_pattern\n" ;;
 
 
-let string_of_value_binding vb : string = 
+
+
+let rec string_of_value_binding vb : string = 
+  let rec string_of_expression e: string =
+    match e.pexp_desc with 
+    | Pexp_ident l -> List.fold_left (fun acc a -> acc ^ a) "" (Longident.flatten l.txt)
+    | Pexp_constant con  -> string_of_p_constant con 
+    | Pexp_let (_, vb_li, e1) -> 
+      List.fold_left (fun acc a -> acc ^ string_of_value_binding a) "" vb_li ^ 
+      string_of_expression e1
+
+    | Pexp_fun (al, None, p1, e1) -> 
+      string_of_arg_label al ^ 
+      string_of_pattern p1 ^
+      string_of_expression e1 
+
+    | Pexp_fun (al, Some e0, p1, e1) -> 
+      string_of_arg_label al ^ 
+      string_of_expression e0 ^ 
+      string_of_pattern p1 ^
+      string_of_expression e1 
+
+    | Pexp_match _ -> "\nPexp_match\n"
+  
+  
+    | _ -> "\nstring_of_expression"
+  in 
   let pattern = vb.pvb_pat in 
   let expression = vb.pvb_expr in
   let attributes = vb.pvb_attributes in 
-  string_of_pattern pattern ^ "\n" ^ 
+  string_of_pattern pattern ^ " = " ^ 
   string_of_expression expression ^  "\n" ^
   string_of_attributes attributes ^ "\n"
 
@@ -123,12 +151,12 @@ let string_of_value_binding vb : string =
 
   ;;
 
+
+
 let forward x : string= 
   match x.pstr_desc with
   | Pstr_value (_, l) ->
     List.fold_left (fun acc a -> acc ^ string_of_value_binding a) "" l
-
-
      
   | Pstr_effect ed -> 
     let name = ed.peff_name.txt in 
